@@ -1,24 +1,11 @@
 import * as web from 'express-decorators';
 import _ from 'lodash';
-import multer from 'multer';
-import fsp from 'fs-promise';
+import { Readable } from 'stream';
 import utils from '@/libs/utils';
 import sanitizers from '@/libs/sanitizers';
 import errors from '@/libs/errors';
 import permissions from '@/libs/permissions';
 import socket from '@/libs/socket';
-
-const binUpload = multer({
-  storage: multer.diskStorage({}),
-  limits: {
-    fieldSize: Math.max(
-      DI.config.compile.limits.sizeOfCode,
-      DI.config.compile.limits.sizeOfBin,
-      DI.config.compile.limits.sizeOfText
-    ) * 2,
-    fileSize: DI.config.compile.limits.sizeOfBin * 2,
-  },
-});
 
 const SUBMISSIONS_PER_PAGE = 50;
 
@@ -69,24 +56,23 @@ export default class Handler {
     token: sanitizers.nonEmptyString(),
     text: sanitizers.string(),
     success: sanitizers.bool(),
+    binary: sanitizers.string().optional(null),
   }))
-  @web.middleware(binUpload.single('binary'))
   @web.middleware(utils.checkAPI())
   async apiCompileEnd(req, res) {
     let file = null;
-    if (req.data.success && req.file) {
-      file = await DI.gridfs.putBlobAsync(fsp.createReadStream(req.file.path), {
+    if (req.data.success && req.data.binary) {
+      const binary = Buffer.from(req.data.binary, 'base64');
+      if (binary.length > DI.config.compile.limits.sizeOfBin * 2) {
+        throw new errors.ValidationError('Executable file is too large');
+      }
+      file = await DI.gridfs.putBlobAsync(Readable.from([binary]), {
         contentType: 'application/x-xz',
         metadata: {
           type: 'submission.binary',
           submission: req.data.id,
         },
       });
-      try {
-        await fsp.remove(req.file.path);
-      } catch (err) {
-        DI.logger.error(err.stack);
-      }
     }
     const sdoc = await DI.models.Submission.judgeCompleteCompileAsync(
       req.data.id,

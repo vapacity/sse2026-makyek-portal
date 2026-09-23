@@ -1,16 +1,10 @@
 import * as web from 'express-decorators';
-import multer from 'multer';
-import fsp from 'fs-promise';
+import { Readable } from 'stream';
 import utils from '@/libs/utils';
 import sanitizers from '@/libs/sanitizers';
 import errors from '@/libs/errors';
 import permissions from '@/libs/permissions';
 import socket from '@/libs/socket';
-
-// file limit is infinity
-const logUpload = multer({
-  storage: multer.diskStorage({}),
-});
 
 @socket.enable()
 @web.controller('/match')
@@ -55,41 +49,30 @@ export default class Handler {
     rid: sanitizers.nonEmptyString(),
     exitCode: sanitizers.int(),
     summary: sanitizers.nonEmptyString(),
+    log: sanitizers.string(),
   }))
-  @web.middleware(logUpload.single('log'))
   @web.middleware(utils.checkAPI())
   async apiRoundComplete(req, res) {
-    if (!req.file) {
-      throw new errors.UserError('Expect logs');
-    }
+    let usedTime = 1 * 60 * 1000;
     try {
-      let usedTime = 1 * 60 * 1000;
-      try {
-        const sdoc = JSON.parse(req.data.summary);
-        usedTime = sdoc.elapsedRoundTime[0];
-      } catch (err) {
-        // failed to extract elapsed round time
-        DI.logger.error(err.stack);
-      }
-      const mdoc = await DI.models.Match.judgeCompleteRoundAsync(
-        req.data.mid,
-        req.data.rid,
-        DI.models.Match.getStatusFromJudgeExitCode(req.data.exitCode),
-        {
-          summary: req.data.summary,
-          usedTime,
-          logBlobStream: fsp.createReadStream(req.file.path),
-          text: '',
-        }
-      );
-      res.json(mdoc);
-    } finally {
-      try {
-        await fsp.remove(req.file.path);
-      } catch (err) {
-        DI.logger.error(err.stack);
-      }
+      const sdoc = JSON.parse(req.data.summary);
+      usedTime = sdoc.elapsedRoundTime[0];
+    } catch (err) {
+      // failed to extract elapsed round time
+      DI.logger.error(err.stack);
     }
+    const mdoc = await DI.models.Match.judgeCompleteRoundAsync(
+      req.data.mid,
+      req.data.rid,
+      DI.models.Match.getStatusFromJudgeExitCode(req.data.exitCode),
+      {
+        summary: req.data.summary,
+        usedTime,
+        logBlobStream: Readable.from([Buffer.from(req.data.log, 'base64')]),
+        text: '',
+      }
+    );
+    res.json(mdoc);
   }
 
   @web.get('/refreshStatus')

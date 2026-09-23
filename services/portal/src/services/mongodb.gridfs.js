@@ -1,40 +1,44 @@
 import mongoose from 'mongoose';
-import Grid from 'gridfs-stream';
 
 export default async (dbConnection) => {
 
-  const gfs = Grid(dbConnection.db, mongoose.mongo);
+  // gridfs-stream 1.x hangs with modern Node.js streams. The MongoDB driver
+  // bundled with Mongoose exposes the same GridFS storage through GridFSBucket.
+  const bucket = new mongoose.mongo.GridFSBucket(dbConnection.db);
 
   return {
     putBlobAsync(rstream, options) {
       return new Promise((resolve, reject) => {
-        const wstream = gfs.createWriteStream(options);
-        wstream.on('close', file => resolve(file));
+        const wstream = bucket.openUploadStream(options.filename || 'blob', {
+          contentType: options.contentType,
+          metadata: options.metadata,
+        });
+        wstream.on('finish', () => resolve({ _id: wstream.id }));
         wstream.on('error', err => reject(err));
         rstream.pipe(wstream);
       });
     },
     getBlobAsync(id, wstream) {
       return new Promise((resolve, reject) => {
-        const rstream = gfs.createReadStream({ _id: id });
-        rstream.on('close', () => resolve());
+        const rstream = bucket.openDownloadStream(id);
+        rstream.on('end', () => resolve());
         rstream.on('error', err => reject(err));
         rstream.pipe(wstream);
       });
     },
     existsAsync(id) {
       return new Promise((resolve, reject) => {
-        gfs.exist({ _id: id }, (err, found) => {
+        bucket.find({ _id: id }).limit(1).toArray((err, files) => {
           if (err) {
             return reject(err);
           }
-          resolve(found);
+          resolve(files.length > 0);
         });
       });
     },
     removeAsync(options) {
       return new Promise((resolve, reject) => {
-        gfs.remove(options, (err) => {
+        bucket.delete(options._id, (err) => {
           if (err) {
             return reject(err);
           }

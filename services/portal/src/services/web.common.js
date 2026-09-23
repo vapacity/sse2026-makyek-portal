@@ -6,7 +6,7 @@ import compress from 'compression';
 export default (app) => {
 
   app.use(bodyParser.json({
-    limit: '2mb',
+    limit: '16mb',
   }));
   app.use(bodyParser.urlencoded({
     limit: '2mb',

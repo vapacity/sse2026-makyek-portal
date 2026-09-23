@@ -96,6 +96,7 @@ npm run smoke:judge
 - `lzma-native` 更新到可在 Node 16/ARM64 构建的版本。
 - Windows TDM-GCC 命令改为 Linux GCC，不再生成 `.exe`。
 - Windows `winc.exe` 沙箱在本地版中关闭。
+- 改用 MongoDB 驱动内置 GridFS，避免旧版 `gridfs-stream` 在 Node 16 下上传编译产物时误报 404。
 - 增加完整 Compose、健康检查、非 root Worker 和本地示例客户端。
 
 ## 规则与旧学生模板

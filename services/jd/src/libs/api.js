@@ -93,20 +93,14 @@ api.compileEnd = (id, token, text, success, lzmaBuffer) => {
     id,
     token,
     text,
-    success: String(success),
+    success,
   };
   if (success && lzmaBuffer) {
-    body.binary = {
-      value: lzmaBuffer,
-      options: {
-        filename: id,
-        contentType: 'application/x-xz',
-      },
-    };
+    body.binary = lzmaBuffer.toString('base64');
   }
   return requestJsonAsync('/submission/api/compileEnd', {
     method: 'POST',
-    formData: body,
+    body,
   });
 };
 
@@ -142,19 +136,13 @@ api.roundComplete = (mid, rid, exitCode, summary, logBuffer) => {
   const body = {
     mid,
     rid,
-    exitCode: String(exitCode),
+    exitCode,
     summary,
-    log: {
-      value: logBuffer,
-      options: {
-        filename: `${rid}_log.txt`,
-        contentType: 'text/plain',
-      },
-    },
+    log: Buffer.from(logBuffer || '').toString('base64'),
   };
   return requestJsonAsync('/match/api/roundComplete', {
     method: 'POST',
-    formData: body,
+    body,
   });
 };
 
