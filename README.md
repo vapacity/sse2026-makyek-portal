@@ -57,6 +57,8 @@ docker compose exec portal npm run cli -- \
 
 提交 C++ 代码时，在页面中选择 **G++ (Linux, C++17)**。已有的 GCC 选项仍用于 C11 代码；先前选错 GCC 而产生的编译错误不会自动改判，需重新提交并选择 G++。
 
+Docker 镜像会使用仓库内的 `config-template.yaml` 生成配置，确保重新克隆后也有同样的编译选项。
+
 ## 检查状态
 
 ```bash

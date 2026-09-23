@@ -8,6 +8,7 @@ COPY services/portal/package*.json ./
 RUN npm ci --legacy-peer-deps --no-audit --no-fund
 
 COPY services/portal ./
+COPY services/portal/config-template.yaml ./config.yaml
 RUN npm run build:ui \
   && npm run build:server \
   && chown -R node:node /workspace

@@ -19,6 +19,13 @@ base:
       extend: [_base, _gcc11]
       env:
         PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    gpp10cpp17:
+      extend: [_base]
+      source: brain.cpp
+      command: g++
+      args: -O2 -s -Wall -o brain brain.cpp -lm -std=c++17
+      env:
+        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   match:
     s1bin: ./challenger
     s2bin: ./opponent

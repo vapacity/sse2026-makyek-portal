@@ -13,6 +13,7 @@ WORKDIR /workspace/services/jd
 COPY services/jd/package*.json ./
 RUN npm ci --legacy-peer-deps --no-audit --no-fund
 COPY services/jd ./
+COPY services/jd/config-template.yaml ./config.yaml
 RUN npm run build \
   && mkdir -p /workspace/runtime /workspace/services/jd/logs \
   && chown -R node:node /workspace

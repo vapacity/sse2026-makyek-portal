@@ -1,36 +1,40 @@
 base:
-  db: mongodb://localhost/reversi-portal
-  redis: redis://localhost
-  secret: arbitrary-secret
+  redis:
+    host: redis
+    port: 6379
+    password: local-redis
+  db: mongodb://makyek:makyek@mongo:27017/db
+  secret: local-development-secret-change-me
   port: 8888
-  host: localhost
+  host: localhost:8888
   cspReportUrl: /
   urlPrefix: ''
   cdnPrefix: ''
   scoreboard:
-    cacheDuration: 600000     # 10 minutes
+    cacheDuration: 10000
   web:
-    realtimePush: true        # disable realtime push if you have many judgers
+    realtimePush: true
   api:
     credential:
-      username: foo
-      password: bar
+      username: judge
+      password: local-judge-secret
   compile:
     display:
-      gcc51c11:     TDM-GCC 5.1.0 (Release, 64-bit, with C11)
+      gcc51c11: GCC (Linux, C11)
+      gpp10cpp17: G++ (Linux, C++17)
     limits:
-      sizeOfCode: 1048576     # 1 MB
-      sizeOfBin: 1048576      # 1 MB
-      sizeOfText: 102400      # 100 KB
-      submitInterval: 300000  # 5 minutes, for students
-      minSubmitInterval: 60000 # 1 minute, for administrators
-      maxExecQuota: 36000000  # 10 hours
+      sizeOfCode: 1048576
+      sizeOfBin: 1048576
+      sizeOfText: 102400
+      submitInterval: 300000
+      minSubmitInterval: 1000
+      maxExecQuota: 36000000
   match:
     rules:
-      moveTimeout: 2000       # 2 s
-      roundTimeout: 90000    # 90 s
-      memoryLimit: 367001600  # 350 MB
-      size: 8
+      moveTimeout: 2000
+      roundTimeout: 90000
+      memoryLimit: 367001600
+      size: 12
       roundLlimit: 60
   profiling:
     eventBus: false
@@ -39,9 +43,9 @@ base:
     vhosts:
       /:
         connection:
-          hostname: localhost
-          user: guest
-          password: guest
+          hostname: rabbit
+          user: root
+          password: local-rabbit
         queues:
           - reversi_compile
           - reversi_judge
