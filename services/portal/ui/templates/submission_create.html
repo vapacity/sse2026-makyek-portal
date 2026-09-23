@@ -10,7 +10,7 @@
         <li class="text-red">Do not copy others' source code. All the code you submitted will be checked for plagiarism. Copycats will fail this project!</li>
         <li>Do not share your source code with others. Similar submissions will be treated as plagiarism.</li>
         <li>Do not use alternative account to submit your code, otherwise you will be recognized as a copycat.</li>
-        <li>Do not submit C++ source code. Only C language is supported.</li>
+        <li>Select GCC for C code or G++ for C++ code.</li>
         <li>Do not abuse our cloud execution service, such as intentionally trying to shutdown our judge machine.</li>
       </ul>
     </blockquote>
@@ -25,13 +25,13 @@
   {%- elif hotStatus == DI('models.Submission.HOT_STATUS_GLOBAL_LIMIT') %}
     <p>Sorry, code submission is disabled currently. Reason: {{ nextSubmitRemaining }}</p>
   {%- else %}
-    <p>Please paste your C source code of your brain in the text box below. Your code will be automatically compiled and judged by the system.</p>
+    <p>Please paste your C or C++ source code below and select the matching compiler. Your code will be automatically compiled and judged by the system.</p>
   </div>
   <div class="section__body">
     <form method="post">
       <div class="row">
         <div class="columns">
-          <label>C Source Code:</label>
+          <label>C / C++ Source Code:</label>
           <textarea name="code" class="monospace textbox" autofocus required></textarea>
         </div>
       </div>

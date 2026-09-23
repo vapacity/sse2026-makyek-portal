@@ -5,7 +5,7 @@
 ## 能做什么
 
 - 在 Docker Desktop 中启动 Portal、MongoDB、Redis 和 RabbitMQ。
-- 在 Linux ARM64 容器中使用 GCC 编译学生 C 程序。
+- 在 Linux ARM64 容器中使用 GCC 编译 C 程序，或使用 G++ 编译 C++17 程序。
 - 消费原有 `reversi_compile`、`reversi_judge` 队列。
 - 使用原 Judge 运行两份学生程序并回传胜负与日志。
 - 保留原有 12×12、输出 `x y` 的裁判协议。
@@ -54,6 +54,8 @@ docker compose exec portal npm run cli -- \
 ```
 
 登录后可提交 [`examples/gomoku-client.c`](examples/gomoku-client.c) 验证完整链路。第一次提交没有对手时会直接生效；第二个用户提交后会产生比赛任务。
+
+提交 C++ 代码时，在页面中选择 **G++ (Linux, C++17)**。已有的 GCC 选项仍用于 C11 代码；先前选错 GCC 而产生的编译错误不会自动改判，需重新提交并选择 G++。
 
 ## 检查状态
 
