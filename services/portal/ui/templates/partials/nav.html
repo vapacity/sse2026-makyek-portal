@@ -1,0 +1,28 @@
+<nav class="nav slideout-menu" id="menu">
+  <div class="row"><div class="columns nav__container">
+    <ol class="nav__container-item">
+      <li><a href="{{ url('/') }}" class="nav__logo">mak-yek~</a></li>
+      <li><a href="{{ url('/') }}" class="nav__item{% if nav_type == 'scoreboard' %} active{% endif %}">Scoreboard</a></li>
+      <li><a href="{{ url('/submission') }}" class="nav__item{% if nav_type == 'submission' %} active{% endif %}">Submission</a></li>
+    </ol>
+    <ol class="nav__container-item">
+    {%- if req.credential.hasPermission(permissions.PROFILE) %}
+      <li><a href="{{ url('/user/profile') }}" class="nav__item{% if nav_type == 'user' %} active{% endif %}">
+      {%- if req.credential.profile.studentId %}
+        {{ req.credential.profile.studentId }}
+        {%- if not req.credential.initial %}
+        ({{ req.credential.profile.displayName }})
+        {%- endif %}
+        {%- if req.credential.role !== 'string' %}
+        <span class="text-red">({{ req.credential.role }})</span>
+        {%- endif %}
+      {%- else %}
+        User Center
+      {%- endif %}
+      </a></li>
+    {%- else %}
+      <li><a href="{{ url('/login') }}" class="nav__button">Sign In</a></li>
+    {%- endif %}
+    </ol>
+  </div></div>
+</nav>

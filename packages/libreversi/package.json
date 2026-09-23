@@ -1,0 +1,22 @@
+{
+  "name": "libreversi",
+  "version": "1.0.0",
+  "description": "Utility library for reversi",
+  "main": "index.js",
+  "author": "Breezewish",
+  "license": "MIT",
+  "scripts": {
+    "test": "xo && ava"
+  },
+  "devDependencies": {
+    "ava": "^0.23.0",
+    "xo": "^0.18.2"
+  },
+  "xo": {
+    "space": 2,
+    "rules": {
+      "no-var": "warn",
+      "comma-dangle": ["error", "always-multiline"]
+    }
+  }
+}

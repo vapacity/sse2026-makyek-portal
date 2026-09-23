@@ -1,0 +1,42 @@
+{% extends "layout/immersive.html" %}
+{% block content %}
+<div class="row">
+  <div class="columns">
+    <div class="section">
+      <div class="section__header">
+        <h1 class="section__title">Welcome, {{ udoc.profile.realName }}</h1>
+      </div>
+      <div class="section__body"><form method="POST">
+        <blockquote class="note">
+          Please update the following information to continue.
+        </blockquote>
+        <div class="row"><div class="columns">
+          <label>New Password</label>
+          <input type="password" class="textbox" name="newPassword" autofocus required>
+          <p class="help-text">Please set a new password for your account.</p>
+        </div></div>
+        <div class="row"><div class="columns">
+          <label>Repeat Password</label>
+          <input type="password" class="textbox" name="newPasswordRepeat" required>
+          <p class="help-text">Please repeat your new password again..</p>
+        </div></div>
+        <div class="row"><div class="columns">
+          <label>Display Name</label>
+          <input type="text" class="textbox" name="displayName" required>
+          <p class="help-text">Please set a display name or nick name for others to see who you are in the scoreboard. It can be changed later.</p>
+        </div></div>
+        <div class="row columns"><div class="text-center">
+          <input type="hidden" name="_csrf" value="{{ ui_context.csrfToken }}">
+          <button class="expanded rounded primary button" type="submit">Continue</button>
+        </div></div>
+      </form>
+      <form action="{{ url('/logout') }}" method="post">
+        <div class="row columns"><div class="text-center">
+          <input type="hidden" name="_csrf" value="{{ ui_context.csrfToken }}">
+          <button class="expanded rounded button" type="submit">Logout</button>
+        </div></div>
+      </form></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

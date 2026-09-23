@@ -1,0 +1,13 @@
+.page--match_detail
+  .col--round-no
+    width: rem(70px)
+
+  .col--challenger, .col--challengee
+    width: rem(140px)
+
+  .col--challenger, .col--challengee, .col--begin-at, .col--action
+    border-left: 1px solid $table-border-color
+
+  +mobile()
+    .col--begin-at, .col--end-at, .col--action
+      display: none

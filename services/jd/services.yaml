@@ -1,0 +1,27 @@
+logger:
+  path: logger
+
+eventBus:
+  path: eventBus
+
+mq:
+  path: mq
+  inject:
+    - logger
+
+compile:
+  path: compile
+  inject:
+    - mq
+    - logger
+
+match:
+  path: match
+  inject:
+    - mq
+    - logger
+
+compileTest:
+  path: compileTest
+  inject:
+    - logger

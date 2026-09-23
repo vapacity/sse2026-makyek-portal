@@ -1,0 +1,8 @@
+# for PM2
+apps:
+  - script: .dist/jd.js
+    name: compile
+    args: --role compile
+    restart_delay: 5000
+    max_restarts: 10
+    min_uptime: 2m

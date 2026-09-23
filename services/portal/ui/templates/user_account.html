@@ -1,0 +1,48 @@
+{% extends "layout/user_base.html" %}
+{% block user_content %}
+<div class="section">
+  <div class="section__header">
+    <h1 class="section__title">My Account</h1>
+  </div>
+  <div class="section__body"><form method="post">
+  {%- if udoc.passwordNeedsReset %}
+    <div class="typo">
+      <blockquote class="note">
+        You are required to set a new password for your account before continuing.
+      </blockquote>
+    </div>
+  {%- endif %}
+  {%- if req.query.updated !== undefined %}
+    <div class="typo">
+      <blockquote class="success">
+        Your password has been updated.
+      </blockquote>
+    </div>
+  {%- endif %}
+    <div class="row">
+      <div class="medium-5 columns">
+        <label>Current Password</label>
+        <input type="password" name="oldPassword" class="textbox" value="">
+      </div>
+    </div>
+    <div class="row">
+        <div class="medium-5 columns">
+          <label>New Password</label>
+          <input type="password" name="newPassword" class="textbox" value="">
+        </div>
+      </div>
+      <div class="row">
+        <div class="medium-5 columns">
+          <label>Repeat New Password</label>
+          <input type="password" name="newPasswordRepeat" class="textbox" value="">
+        </div>
+      </div>
+    <div class="row">
+      <div class="medium-5 columns">
+        <input type="hidden" name="_csrf" value="{{ ui_context.csrfToken }}">
+        <button class="primary rounded button" type="submit">Update Password</button>
+      </div>
+    </div>
+  </form></div>
+</div>
+{% endblock %}

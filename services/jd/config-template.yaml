@@ -1,0 +1,34 @@
+base:
+  api:
+    url: http://portal:8888
+    credential:
+      username: judge
+      password: local-judge-secret
+  # Linux worker for local macOS development; no hostile-code sandbox.
+  sandbox: null
+  runtimeDirectory: ../../runtime
+  compile:
+    _base:
+      timeout: 20000
+      source: brain.c
+      target: brain
+    _gcc11:
+      command: gcc
+      args: -O2 -s -Wall -o brain brain.c -lm -std=c11
+    gcc51c11:
+      extend: [_base, _gcc11]
+      env:
+        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  match:
+    s1bin: ./challenger
+    s2bin: ./opponent
+    config: config.json
+    summary: summary.json
+    command: node
+    args: ../../../services/judge/.dist/bootstrap.js --config config.json
+  mq:
+    connection:
+      hostname: rabbit
+      username: root
+      password: local-rabbit
+      heartbeat: 30

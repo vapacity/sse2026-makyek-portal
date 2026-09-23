@@ -1,0 +1,13 @@
+{
+  "name": "makyek-mac",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "config": "docker compose config",
+    "build": "docker compose build",
+    "up": "docker compose up -d --build",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f portal compiler judge",
+    "smoke:judge": "node scripts/smoke-judge.js"
+  }
+}

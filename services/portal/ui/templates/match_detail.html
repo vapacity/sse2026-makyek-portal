@@ -1,0 +1,106 @@
+{% extends "layout/basic.html" %}
+{% block content %}
+<div class="row" data-sticky-parent>
+  <div class="medium-9 columns">
+    <div class="section">
+      <div class="section__header">
+        <h1 class="section__title">Rounds</h1>
+      </div>
+      <div class="section__body no-padding">
+        <table class="data-table">
+          <colgroup>
+            <col class="col--round-no">
+            <col class="col--challenger round-status--cell">
+            <col class="col--challengee round-status--cell">
+            <col class="col--begin-at"></col>
+            <col class="col--end-at"></col>
+            <col class="col--action"></col>
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="col--round-no">#</th>
+              <th class="col--challenger round-status--cell">#{{ mdoc.u1Submission.version }}: {{ mdoc.u1.profile.displayName }}</th>
+              <th class="col--challengee round-status--cell">#{{ mdoc.u2Submission.version }}: {{ mdoc.u2.profile.displayName }}</th>
+              <th class="col--begin-at">Begin At</th>
+              <th class="col--end-at">End At</th>
+              <th class="col--action">Action</th>
+            </tr>
+          </thead>
+          <tbody id="round_row_container">
+          {%- for rdoc in mdoc.rounds %}
+            {%- include "partials/match_detail_round_row.html" -%}
+          {%- endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="medium-3 columns"><div data-sticky="medium">
+    <div class="side section">
+      <div class="section__header">
+        <h1 class="section__title">Match Info</h2>
+      </div>
+      <div class="section__body typo">
+        <dl class="large horizontal">
+          <dt>Status</dt>
+          {%- include "partials/match_detail_match_status.html" -%}
+          <dt>At</dt>
+          <dd>
+            {{ mdoc.createdAt|datetime }}
+          </dd>
+          <dt>Rounds</dt>
+          <dd>
+            {{ mdoc.rounds.length }}
+          </dd>
+        </dl>
+        <h2 class="section__title">Challenger</h2>
+        <dl class="large horizontal">
+          <dt>By</dt>
+          <dd>
+            <a href="{{ url('/submission/user/{0}', false, [mdoc.u1._id]) }}">
+              {{ mdoc.u1.profile.displayName }}
+            </dd>
+          </dd>
+          <dt>Version</dt>
+          <dd>
+            <a href="{{ url('/submission/{0}', false, [mdoc.u1Submission._id]) }}">
+              #{{ mdoc.u1Submission.version }}
+            </a>
+          </dd>
+        {%- if req.credential.hasPermission(permissions.VIEW_ANY_PROFILE) %}
+          <dt>Std Id</dt>
+          <dd>{{ mdoc.u1.profile.studentId }}</dd>
+          <dt>Real Name</dt>
+          <dd>{{ mdoc.u1.profile.realName }}</dd>
+        {%- endif %}
+          <dt>Submit At</dt>
+          <dd>{{ mdoc.u1Submission.createdAt|datetime }}</dd>
+        </dl>
+        <h2 class="section__title">Opponent</h2>
+        <dl class="large horizontal">
+          <dt>By</dt>
+          <dd>
+            <a href="{{ url('/submission/user/{0}', false, [mdoc.u2._id]) }}">
+              {{ mdoc.u2.profile.displayName }}
+            </a>
+          </dd>
+          <dt>Version</dt>
+          <dd>
+            <a href="{{ url('/submission/{0}', false, [mdoc.u2Submission._id]) }}">
+              #{{ mdoc.u2Submission.version }}
+            </a>
+          </dd>
+        {%- if req.credential.hasPermission(permissions.VIEW_ANY_PROFILE) %}
+          <dt>Std Id</dt>
+          <dd>{{ mdoc.u2.profile.studentId }}</dd>
+          <dt>Real Name</dt>
+          <dd>{{ mdoc.u2.profile.realName }}</dd>
+        {%- endif %}
+          <dt>Submit At</dt>
+          <dd>{{ mdoc.u2Submission.createdAt|datetime }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div></div>
+</div>
+{% endblock %}

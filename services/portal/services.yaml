@@ -1,0 +1,87 @@
+# ========================
+# Essentials
+
+logger:
+  path: logger
+
+eventBus:
+  path: eventBus
+
+mq:
+  path: mq
+  inject:
+    - logger
+
+redis:
+  path: redis
+  inject:
+    - logger
+
+mongodbConnection:
+  path: mongodb.connection
+  inject:
+    - logger
+
+gridfs:
+  path: mongodb.gridfs
+  inject:
+    - mongodbConnection
+
+webServer:
+  path: web.server
+  inject:
+    - logger
+
+webLogger:
+  path: web.logger
+  inject:
+    - webServer
+
+webCommon:
+  path: web.common
+  inject:
+    - webServer
+
+webStatic:
+  path: web.static
+  inject:
+    - webServer
+
+webSession:
+  path: web.session
+  inject:
+    - webServer
+    - mongodbConnection
+
+webSocket:
+  path: web.socket
+  inject:
+    - webServer
+    - webSession
+
+webTemplate:
+  path: web.template
+  inject:
+    - webServer
+
+webSecurity:
+  path: web.security
+  inject:
+    - webServer
+
+
+# ========================
+# Models
+
+models:
+  path: models
+
+# ========================
+# Presentation Layer
+
+handlers:
+  path: handlers
+  inject:
+    - webServer
+    - webSocket
+    - logger

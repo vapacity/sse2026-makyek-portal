@@ -1,0 +1,42 @@
+{% extends "layout/basic.html" %}
+{% block content %}
+<div class="row" data-sticky-parent>
+  <div class="medium-9 columns">
+    {% block submission_content %}{% endblock %}
+  </div>
+  <div class="medium-3 columns"><div data-sticky="medium">
+    {% block submission_sidebar %}{% endblock %}
+    <div class="section side">
+      <div class="section__header">
+        <h1 class="section__title">Submission</h1>
+      </div>
+      <ol class="menu">
+        <li class="menu__item">
+          <a href="{{ url('/submission/running') }}" class="menu__link{% if page_name == 'submission_running' %} active{% endif %}">
+            <span class="icon icon-hourglass"></span>
+            Running Submissions
+          </a>
+        </li>
+        <li class="menu__item">
+          <a href="{{ url('/submission/all') }}" class="menu__link{% if page_name == 'submission_all' %} active{% endif %}">
+            <span class="icon icon-unordered_list"></span>
+            All Submissions
+          </a>
+        </li>
+        <li class="menu__item">
+          <a href="{{ url('/submission/my') }}" class="menu__link{% if page_name == 'submission_my' %} active{% endif %}">
+            <span class="icon icon-flag"></span>
+            My Submissions
+          </a>
+        </li>
+        <li class="menu__item">
+          <a href="{{ url('/submission/create') }}" class="menu__link{% if page_name == 'submission_create' %} active{% endif %}">
+            <span class="icon icon-send"></span>
+            Submit New Brain
+          </a>
+        </li>
+      </ol>
+    </div>
+  </div></div>
+</div>
+{% endblock %}

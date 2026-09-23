@@ -1,0 +1,56 @@
+{% extends "layout/basic.html" %}
+{% block content %}
+<div class="row" data-sticky-parent>
+  <div class="medium-9 columns">
+    {% block user_content %}{% endblock %}
+  </div>
+  <div class="medium-3 columns"><div data-sticky="medium">
+    <div class="section side">
+      <ol class="menu">
+        <li class="menu__item">
+          <a href="{{ url('/user/account') }}" class="menu__link{% if page_name == 'user_account' %} active{% endif %}">
+            <span class="icon icon-user"></span>
+            My Account
+          </a>
+        </li>
+        <li class="menu__item">
+          <a href="{{ url('/user/profile') }}" class="menu__link{% if page_name == 'user_profile' %} active{% endif %}">
+            <span class="icon icon-account--circle"></span>
+            My Profile
+          </a>
+        </li>
+        <li class="menu__item">
+          <a href="{{ url('/user/settings') }}" class="menu__link{% if page_name == 'user_settings' %} active{% endif %}">
+            <span class="icon icon-wrench"></span>
+            Settings
+          </a>
+        </li>
+      {%- if req.credential.hasPermission(permissions.VIEW_MANAGE_PORTAL) %}
+        <li class="menu__item">
+          <a href="{{ url('/manage/system') }}" class="menu__link{% if page_name == 'manage_system' %} active{% endif %}">
+            <span class="icon icon-settings"></span>
+            Manage: System
+          </a>
+        </li>
+        <li class="menu__item">
+          <a href="{{ url('/manage/matches') }}" class="menu__link{% if page_name == 'manage_matches' %} active{% endif %}">
+            <span class="icon icon-settings"></span>
+            Manage: Matches
+          </a>
+        </li>
+      {%- endif %}
+        <li class="menu__seperator"></li>
+        <li class="menu__item">
+          <form action="{{ url('/logout') }}" method="post">
+            <input type="hidden" name="_csrf" value="{{ ui_context.csrfToken }}">
+            <button type="submit" class="menu__link">
+              <span class="icon icon-close"></span>
+              Logout
+            </button>
+          </form>
+        </li>
+      </ol>
+    </div>
+  </div></div>
+</div>
+{% endblock %}

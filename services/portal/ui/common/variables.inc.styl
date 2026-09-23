@@ -1,0 +1,120 @@
+// Colors
+$default-color = #e8e8e8
+$primary-color = #5f9fd6
+$secondary-color = #ED5F82
+$highlight-color = #df6589
+$text-color = #555
+$header-color = #3D3D3D
+$blockquote-color = #999
+$small-color = #888
+$bg-color = #EDF0F2
+$font-size = 16px             // main content
+$font-size-secondary = 14px   // secondary content
+$font-size-small = 13px       // additional informations, usually gray colored
+$font-size-icon = 16px
+$font-size-title = 20px
+$table-border-color = $default-color
+
+$supplementary-color = lighten($text-color, 50%)
+$supplementary-border-color = lighten($supplementary-color, 62%)
+$supplementary-link-color = lighten($text-color, 40%)
+
+$immersive-primary-color = #FFEF87
+$immersive-text-color = #F8F8F8
+$immersive-header-color = #FFFFFF
+
+$success-color = #25ad40
+$fail-color = #fb5555
+$progress-color = #f39800
+$invalid-color = #9fa0a0
+$draw-color = #f39800
+
+$table-padding-h = 10px
+
+// Fonts
+$primary-font-family = "Open Sans", "Seravek", "Segoe UI", "Verdana", "PingFang SC", "Hiragino Sans GB", "Lantinghei SC", "Microsoft Yahei", "WenQuanYi Micro Hei", "sans"
+$header-font-family = "Open Sans", "Seravek", "Segoe UI", "Verdana", "PingFang SC", "Lantinghei SC", "Microsoft Yahei", "Hiragino Sans GB", "Microsoft Sans Serif", "WenQuanYi Micro Hei", "sans-serif"
+$code-font-family = "monaco", "Source Code Pro", "Consolas", "Lucida Console", "monospace"
+
+// Notification
+$notification-color = {
+  'success': #9BDB7B,
+  'info': #78D6F4,
+  'warn': #FCD279,
+  'error': #FD848D,
+}
+
+$notification-icon = {
+  'success': $icon-check--circle,
+  'info': $icon-info--circle,
+  'warn': $icon-info--circle,
+  'error': $icon-close--circle,
+}
+
+// Submission Status
+$submission-status-color = {
+  'pending': $invalid-color,
+  'compiling': $progress-color,
+  'ce': $fail-color,
+  'se': $fail-color,
+  'running': $progress-color,
+  'effective': $success-color,
+  'ignored': $invalid-color,
+}
+
+$submission-status-icon = {
+  'pending': $icon-schedule,
+  'compiling': $icon-hourglass,
+  'ce': $icon-close,
+  'se': $icon-close,
+  'running': $icon-hourglass,
+  'effective': $icon-check,
+  'ignored': $icon-close,
+}
+
+// Match Status
+$match-status-color = {
+  'pending': $invalid-color,
+  'se': $invalid-color,
+  'running': $invalid-color,
+  'win': $success-color,
+  'lose': $fail-color,
+  'u1win': $success-color,
+  'u2win': $fail-color,
+  'draw': $draw-color,
+}
+
+$match-status-icon = {
+  'pending': $icon-schedule,
+  'se': $icon-close,
+  'running': $icon-hourglass,
+  'win': $icon-check,
+  'lose': $icon-close,
+  'u1win': $icon-check,
+  'u2win': $icon-close,
+  'draw': $icon-circle--outline,
+}
+
+// Round Status
+$round-status-color = {
+  'pending': $invalid-color,
+  'se': $invalid-color,
+  'running': $invalid-color,
+  'win': $success-color,
+  'lose': $fail-color,
+  'u1win': $success-color,
+  'u2win': $fail-color,
+  'draw': $draw-color,
+}
+
+$round-status-icon = {
+  'pending': $icon-schedule,
+  'se': $icon-close,
+  'running': $icon-hourglass,
+  'win': $icon-check,
+  'lose': $icon-close,
+  'u1win': $icon-check,
+  'u2win': $icon-close,
+  'draw': $icon-circle--outline,
+}
+

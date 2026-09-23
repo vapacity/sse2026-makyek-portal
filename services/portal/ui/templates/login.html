@@ -1,0 +1,26 @@
+{% extends "layout/immersive.html" %}
+{% block content %}
+<div class="row">
+  <div class="columns">
+    <div class="section">
+      <div class="section__header">
+        <h1 class="section__title">Sign In</h1>
+      </div>
+      <div class="section__body"><form method="POST">
+        <div class="row"><div class="columns">
+          <label>Username</label>
+          <input type="text" class="textbox" name="username" autofocus>
+        </div></div>
+        <div class="row"><div class="columns">
+          <label>Password</label>
+          <input type="password" class="textbox" name="password">
+        </div></div>
+        <div class="row columns"><div class="text-center">
+          <input type="hidden" name="_csrf" value="{{ ui_context.csrfToken }}">
+          <button class="expanded rounded primary button" type="submit">Sign In</button>
+        </div></div>
+      </form></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
