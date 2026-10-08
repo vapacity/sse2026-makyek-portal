@@ -33,6 +33,8 @@ function getCurrentBrain() {
 }
 
 function shutdown(exitCode, causedBy) {
+  if (hasShutdown) return;
+  hasShutdown = true;
   utils.log('debug', {action: 'shutdown', exitCode, causedBy});
   _.forEach(brains, brain => {
     brain.ignoreAllEvents = true;
@@ -51,9 +53,11 @@ function shutdown(exitCode, causedBy) {
     fs.writeFileSync(argvConfig.summary, JSON.stringify(summaryData));
   }
 
-  hasShutdown = true;
   process.exit(exitCode);
 }
+
+process.on('SIGTERM', () => shutdown(exitCode.EXIT_ERROR, 'Judge terminated'));
+process.on('SIGINT', () => shutdown(exitCode.EXIT_ERROR, 'Judge interrupted'));
 
 function handleBrainError(id, err) {
   utils.log('info', {type: 'brainError', error: err.message, id});

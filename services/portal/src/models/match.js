@@ -11,6 +11,12 @@ export default () => {
     u2: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     u1Submission: { type: mongoose.Schema.Types.ObjectId, ref: 'Submission' },
     u2Submission: { type: mongoose.Schema.Types.ObjectId, ref: 'Submission' },
+    matchKey: String,
+    generation: String,
+    obsolete: Boolean,
+    exe1Blob: mongoose.Schema.Types.ObjectId,
+    exe2Blob: mongoose.Schema.Types.ObjectId,
+    stateVersion: { type: Number, default: 0 },
     rounds: [{
       _id: mongoose.Schema.Types.ObjectId,
       status: String,
@@ -22,6 +28,9 @@ export default () => {
       text: String,
       summary: String,
       usedTime: Number,   // extracted from summary by controller
+      runToken: String,
+      leaseUntil: Date,
+      completedRunToken: String,
     }],
   }, {
     timestamps: true,
@@ -88,7 +97,7 @@ export default () => {
         const rdoc = mdoc.rounds[m[1]];
         await DI.eventBus.emitAsyncWithProfiling('match.rounds.status:updated::**', mdoc, rdoc);
       }
-    }));
+    })).catch(err => DI.logger.error(err.stack));
   });
 
   /**
@@ -143,10 +152,11 @@ export default () => {
    * @return {[Match, Round]}
    */
   MatchSchema.statics.getRoundObjectByIdAsync = async function (mdocid, rdocid) {
-    const mdoc = await Match.getMatchObjectByIdAsync(mdocid);
+    const mdoc = await Match.getMatchObjectByIdAsync(mdocid, {}, false);
+    if (!mdoc) throw new errors.TaskConflictError('Match no longer exists');
     const rdoc = mdoc.rounds.find(rdoc => rdoc._id.equals(rdocid));
     if (rdoc === undefined) {
-      throw new errors.UserError('Round not found');
+      throw new errors.TaskConflictError('Round no longer exists');
     }
     return [mdoc, rdoc];
   };
@@ -184,7 +194,7 @@ export default () => {
    * Push a round task into the queue
    */
   async function publishRoundTaskAsync(mdoc, rdoc) {
-    await DI.mq.publish('judge', {
+    await DI.models.Task.enqueueAsync(`judge:${mdoc._id}:${rdoc._id}`, 'judge', {
       mdocid: String(mdoc._id),
       s1docid: String(mdoc.u1Submission),
       s2docid: String(mdoc.u2Submission),
@@ -196,16 +206,31 @@ export default () => {
     });
   }
 
+  MatchSchema.statics.isCurrentAsync = async function (mdoc) {
+    if (mdoc.obsolete) return false;
+    if (!mdoc.generation) return true; // compatibility with existing local data
+    const sdoc = await DI.models.Submission.findById(mdoc.u1Submission).select('matchGeneration matchesReady matches');
+    if (!sdoc || sdoc.matchGeneration !== mdoc.generation) {
+      await Match.update({ _id: mdoc._id }, { $set: { obsolete: true } });
+      return false;
+    }
+    return sdoc.matchesReady === true && sdoc.matches.some(d => d._id.equals(mdoc._id));
+  };
+
+  MatchSchema.statics.enqueueRoundsAsync = async function (mdoc) {
+    for (const rdoc of mdoc.rounds) {
+      if (rdoc.status === 'pending' || rdoc.status === 'running') await publishRoundTaskAsync(mdoc, rdoc);
+    }
+  };
+
   /**
-   * Add all matches for a new submission. If the submission have related matches
-   * previously, they will be removed.
+   * Add matches idempotently, without deleting the previous generation's data.
    *
    * @param {Submission} s1
    * @param {User} u1
    * @param {[{_id: User, sdocid: Submission}]} s2u2docs
    */
-  MatchSchema.statics.addMatchesForSubmissionAsync = async function (s1, u1, s2u2docs) {
-    await Match.remove({ u1Submission: s1 });
+  MatchSchema.statics.addMatchesForSubmissionAsync = async function (s1, u1, s2u2docs, generation, exe1Blob) {
     if (s2u2docs.length === 0) {
       return [];
     }
@@ -213,21 +238,25 @@ export default () => {
     const endProfile = utils.profile('Match.addMatchesForSubmissionAsync', DI.config.profiling.addMatches);
 
     const mdocs = [];
-    await Promise.all(s2u2docs.map(async s2u2doc => {
-      const mdoc = new Match({
-        status: Match.STATUS_PENDING,
-        u1,
-        u2: s2u2doc._id,
-        u1Submission: s1,
-        u2Submission: s2u2doc.sdocid,
-        usedTime: 0,
-        rounds: generateRoundDocs(),
-      });
-      await mdoc.save();
-      // push each round of each match into the queue
-      await Promise.all(mdoc.rounds.map(rdoc => publishRoundTaskAsync(mdoc, rdoc)));
-      mdocs.push(mdoc);
-    }));
+    const batchSize = Math.max(1, (DI.config.tasks || {}).matchBatchSize || 8);
+    for (let i = 0; i < s2u2docs.length; i += batchSize) {
+      await Promise.all(s2u2docs.slice(i, i + batchSize).map(async s2u2doc => {
+        const matchKey = `${s1}:${s2u2doc.sdocid}:${generation}`;
+        const data = {
+          matchKey, generation, exe1Blob, exe2Blob: s2u2doc.exeBlob,
+          status: Match.STATUS_PENDING,
+          u1,
+          u2: s2u2doc._id,
+          u1Submission: s1,
+          u2Submission: s2u2doc.sdocid,
+          usedTime: 0,
+          rounds: generateRoundDocs(),
+        };
+        try { await Match.update({ matchKey }, { $setOnInsert: data }, { upsert: true }); }
+        catch (err) { if (err.code !== 11000) throw err; }
+        mdocs.push(await Match.findOne({ matchKey }));
+      }));
+    }
 
     endProfile();
 
@@ -238,11 +267,13 @@ export default () => {
    * Reset match and regenerate rounds for a match.
    */
   MatchSchema.statics.rejudgeMatchAsync = async function (mdocid) {
-    const mdoc = await Match.getMatchObjectByIdAsync(mdocid);
-    mdoc.status = Match.STATUS_PENDING;
-    mdoc.rounds = generateRoundDocs();
-    await mdoc.save();
-    await Promise.all(mdoc.rounds.map(rdoc => publishRoundTaskAsync(mdoc, rdoc)));
+    const original = await Match.getMatchObjectByIdAsync(mdocid);
+    if (!await Match.isCurrentAsync(original)) throw new errors.UserError('Cannot rejudge an obsolete match');
+    const mdoc = await Match.findOneAndUpdate({ _id: mdocid }, { $set: {
+      status: 'pending', rounds: generateRoundDocs(), updatedAt: new Date(),
+    }, $inc: { stateVersion: 1 } }, { new: true });
+    await Match.notifyStatusAsync(mdoc);
+    await Match.enqueueRoundsAsync(mdoc);
     return mdoc;
   };
 
@@ -325,9 +356,24 @@ export default () => {
   };
 
   MatchSchema.statics.updateMatchStatusAsync = async function (mdocid) {
-    const mdoc = await Match.getMatchObjectByIdAsync(mdocid);
-    mdoc.updateStatus();
-    await mdoc.save();
+    for (let i = 0; i < 5; i++) {
+      const mdoc = await Match.getMatchObjectByIdAsync(mdocid);
+      const previous = mdoc.status;
+      mdoc.updateStatus();
+      if (mdoc.status === previous) return mdoc;
+      const version = mdoc.stateVersion || 0;
+      const changed = await Match.findOneAndUpdate({ _id: mdocid, status: previous,
+        $or: [{ stateVersion: version }, { stateVersion: { $exists: false } }],
+      }, { $set: { status: mdoc.status, updatedAt: new Date() } }, { new: true });
+      if (changed) { await Match.notifyStatusAsync(changed); return changed; }
+    }
+  };
+
+  MatchSchema.statics.notifyStatusAsync = async function (mdoc, rid = null) {
+    try {
+      await DI.eventBus.emitAsyncWithProfiling('match.status:updated::**', mdoc.toObject());
+      if (rid) await DI.eventBus.emitAsyncWithProfiling('match.rounds:updated::**', mdoc.toObject(), mdoc.rounds.id(rid).toObject());
+    } catch (err) { DI.logger.error(err.stack); }
   };
 
   /**
@@ -337,12 +383,25 @@ export default () => {
    * @param  {MongoId} rid Round Id
    * @return {Match}
    */
-  MatchSchema.statics.judgeStartRoundAsync = async function (mdocid, rid) {
-    const [mdoc, rdoc] = await Match.getRoundObjectByIdAsync(mdocid, rid);
-    rdoc.status = Match.STATUS_RUNNING;
-    rdoc.beginJudgeAt = new Date();
-    await mdoc.save();
-    return mdoc;
+  MatchSchema.statics.judgeStartRoundAsync = async function (mdocid, rid, runToken) {
+    const original = await Match.getMatchObjectByIdAsync(mdocid, {}, false);
+    if (!original || !await Match.isCurrentAsync(original)) throw new errors.TaskConflictError('Match is obsolete or not ready');
+    const mdoc = await Match.findOneAndUpdate({ _id: mdocid, obsolete: { $ne: true },
+      rounds: { $elemMatch: { _id: rid, $or: [
+        { status: 'pending' },
+        { status: 'running', leaseUntil: { $lte: new Date() } },
+        { status: 'running', leaseUntil: { $exists: false } },
+        { status: 'running', runToken },
+      ] } },
+    }, { $set: { 'rounds.$.status': 'running', 'rounds.$.runToken': runToken,
+      'rounds.$.beginJudgeAt': new Date(), 'rounds.$.leaseUntil': new Date(Date.now() +
+        ((DI.config.tasks || {}).roundLease || 600000)), updatedAt: new Date() },
+      $inc: { stateVersion: 1 } }, { new: true });
+    if (!mdoc) throw new errors.TaskConflictError('Round is obsolete or already claimed');
+    await Match.updateMatchStatusAsync(mdocid);
+    const current = await Match.findById(mdocid);
+    await Match.notifyStatusAsync(current, rid);
+    return current;
   };
 
   /**
@@ -354,7 +413,7 @@ export default () => {
    * @param  {Object} extra Extra fields to be added to the round
    * @return {Match}
    */
-  MatchSchema.statics.judgeCompleteRoundAsync = async function (mdocid, rid, status, extra = {}) {
+  MatchSchema.statics.judgeCompleteRoundAsync = async function (mdocid, rid, status, extra = {}, runToken) {
     if (
       status !== Match.STATUS_U1WIN
       && status !== Match.STATUS_U2WIN
@@ -364,14 +423,13 @@ export default () => {
       throw new Error(`judgeCompleteRoundAsync: status ${status} is invalid`);
     }
     const [mdoc, rdoc] = await Match.getRoundObjectByIdAsync(mdocid, rid);
-    rdoc.status = status;
-    rdoc.endJudgeAt = new Date();
-    if (!rdoc.beginJudgeAt) {
-      rdoc.beginJudgeAt = new Date();
-    }
+    if (!await Match.isCurrentAsync(mdoc)) throw new errors.TaskConflictError('Match is obsolete');
+    if (rdoc.completedRunToken === runToken) return mdoc;
+    if (rdoc.status !== 'running' || rdoc.runToken !== runToken) throw new errors.TaskConflictError('Round ownership no longer matches');
+    let file = null;
     if (extra.logBlobStream) {
       // if a log stream is specified, put it into gridfs
-      const file = await DI.gridfs.putBlobAsync(extra.logBlobStream, {
+      file = await DI.gridfs.putBlobAsync(extra.logBlobStream, {
         contentType: 'text/plain',
         metadata: {
           type: 'match.log',
@@ -382,9 +440,22 @@ export default () => {
       extra.logBlob = file._id;
       extra.logBlobStream = null;
     }
-    _.assign(rdoc, extra);
-    await mdoc.save();
-    return mdoc;
+    const set = { 'rounds.$.status': status, 'rounds.$.endJudgeAt': new Date(),
+      'rounds.$.completedRunToken': runToken, 'rounds.$.leaseUntil': null, updatedAt: new Date() };
+    for (const key of ['summary', 'text', 'usedTime', 'logBlob']) {
+      if (extra[key] !== undefined) set[`rounds.$.${key}`] = extra[key];
+    }
+    const changed = await Match.findOneAndUpdate({ _id: mdocid, obsolete: { $ne: true },
+      rounds: { $elemMatch: { _id: rid, status: 'running', runToken } },
+    }, { $set: set, $inc: { stateVersion: 1 } }, { new: true });
+    if (!changed) {
+      if (file) await DI.gridfs.removeAsync({ _id: file._id });
+      throw new errors.TaskConflictError('Round ownership no longer matches');
+    }
+    await Match.updateMatchStatusAsync(mdocid);
+    const current = await Match.findById(mdocid);
+    await Match.notifyStatusAsync(current, rid);
+    return current;
   };
 
   /**
@@ -463,7 +534,8 @@ export default () => {
   };
 
 
-  MatchSchema.index({ u1Submission: 1, u2Submission: -1, status: 1, _id: -1 }, { unique: true });
+  // Sparse index preserves old records while enforcing uniqueness for new work.
+  MatchSchema.index({ matchKey: 1 }, { unique: true, sparse: true });
   MatchSchema.index({ u1Submission: 1, _id: -1 });
   MatchSchema.index({ u2Submission: 1, _id: -1 });
   MatchSchema.index({ status: 1, _id: -1 });

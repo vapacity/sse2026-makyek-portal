@@ -1,5 +1,4 @@
 import {EventEmitter2} from 'eventemitter2';
-import byline from 'byline';
 
 import errors from './errors';
 import utils from './utils';
@@ -21,22 +20,40 @@ export default class Brain extends EventEmitter2 {
     this.process = utils.spawnSandbox(options.bin, [], options.sandbox, {
       affinity: options.affinity,
       maxMemory: options.maxMemory,
+      maxTime: options.maxTime,
     });
     this.process.stdout.setEncoding('utf8');
     this.process.on('error', this.handleProcessError.bind(this));
     this.process.on('exit', this.handleProcessExit.bind(this));
     this.process.stdin.on('error', this.handleProcessError.bind(this));
     this.process.stdout.on('error', this.handleProcessError.bind(this));
+    // Drain stderr so a noisy student program cannot block on a full pipe.
+    this.process.stderr.resume();
 
     this.allowStdout = false;
-    this.stdout = byline(this.process.stdout);
-    this.stdout.on('data', this.handleStdoutLine.bind(this));
+    this.lineBuffer = '';
+    this.process.stdout.on('data', chunk => {
+      this.lineBuffer += chunk;
+      let newline;
+      while ((newline = this.lineBuffer.indexOf('\n')) !== -1) {
+        const line = this.lineBuffer.slice(0, newline).replace(/\r$/, '');
+        this.lineBuffer = this.lineBuffer.slice(newline + 1);
+        if (line.length > DEBUG_SINGLE_LIMIT) {
+          this.handleProcessError(new Error('Output line exceeds limit'));
+          this.kill(); return;
+        }
+        if (line.length) this.handleStdoutLine(line);
+        if (this.processExited) return;
+      }
+      // Bound output even when the program never emits a newline.
+      if (this.lineBuffer.length > DEBUG_SINGLE_LIMIT) {
+        this.handleProcessError(new Error('Output line exceeds limit'));
+        this.kill();
+      }
+    });
   }
 
   kill() {
-    if (this.processExited) {
-      return;
-    }
     utils.terminateProcess(this.process);
     this.processExited = true;
   }

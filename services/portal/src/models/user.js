@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import objectId from '@/libs/objectId';
 import errors from '@/libs/errors';
 import roles from '@/libs/roles';
+import uuid from 'uuid';
 
 export default () => {
   const UserSchema = new mongoose.Schema({
@@ -21,12 +22,38 @@ export default () => {
     initial: Boolean,
     passwordNeedsReset: Boolean,
     submissionNumber: Number,
+    submissionLockToken: String,
+    submissionLockUntil: Date,
   }, {
     timestamps: true,
   });
 
   // User Model
   let User;
+
+  // Serialize throttle-check + insert across all portal instances.
+  UserSchema.statics.withSubmissionLockAsync = async function (uid, action) {
+    const token = uuid.v4();
+    const lock = await User.findOneAndUpdate({ _id: uid, $or: [
+      { submissionLockUntil: { $exists: false } },
+      { submissionLockUntil: { $lte: new Date() } },
+    ] }, { $set: { submissionLockToken: token,
+      submissionLockUntil: new Date(Date.now() + 120000) } }, { new: true });
+    if (!lock) throw new errors.UserError('Another submission operation is in progress. Please retry later.');
+    const timer = setInterval(() => {
+      User.update({ _id: uid, submissionLockToken: token }, { $set: {
+        submissionLockUntil: new Date(Date.now() + 120000),
+      } }).exec().catch(err => DI.logger.error(err.stack));
+    }, 30000);
+    timer.unref();
+    try { return await action(); }
+    finally {
+      clearInterval(timer);
+      await User.update({ _id: uid, submissionLockToken: token }, {
+        $unset: { submissionLockToken: 1, submissionLockUntil: 1 },
+      }).exec().catch(err => DI.logger.error(err.stack));
+    }
+  };
 
   /**
    * Normalize the userName

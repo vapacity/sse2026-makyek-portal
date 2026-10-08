@@ -8,6 +8,8 @@
     "up": "docker compose up -d --build",
     "down": "docker compose down",
     "logs": "docker compose logs -f portal compiler judge",
-    "smoke:judge": "node scripts/smoke-judge.js"
+    "smoke:judge": "node scripts/smoke-judge.js",
+    "test:concurrency": "docker compose build portal compiler && docker compose --profile test build tests && docker compose run --rm --no-deps tests",
+    "test:resources": "docker compose build portal compiler && docker compose --profile test build tests && docker compose run --rm --no-deps tests node /workspace/scripts/test-resources.js"
   }
 }

@@ -1,6 +1,5 @@
 import { argv } from 'yargs';
 import { execFile } from 'child-process-promise';
-import AsyncCache from 'async-cache';
 import os from 'os';
 import path from 'path';
 import del from 'del';
@@ -28,61 +27,26 @@ export default async (mq, logger) => {
   // Self running at Core 1
   utils.captureCore();
 
-  // Initialize binary buffer directory. At runtime, the directory must not be cleared.
-  const bufferDirectory = path.resolve(DI.config.runtimeDirectory, 'match_bin_buffer');
-  await fsp.ensureDir(bufferDirectory);
-
-  async function loadBinaryCache(udocid, sdocid) {
-    const binPath = path.join(bufferDirectory, `${udocid}/${sdocid}.exe`);
-    await fsp.ensureDir(path.dirname(binPath));
-    try {
-      await fsp.access(binPath);
-      return binPath;
-    } catch (ignore) {
-      // file does not exist, go on
-    }
-    const content = await lzma.decompress(await api.getSubmissionBinary(sdocid), LZMA_DECOMPRESS_OPTIONS);
-    await fsp.writeFile(binPath, content, { mode: 0o755 });
-    return binPath;
-  }
-
-  const _binaryCache = new AsyncCache({
-    max: 500,
-    maxAge: 24 * 60 * 60 * 1000,
-    load: (key, callback) => {
-      const [udocid, sdocid] = key.split(':');
-      loadBinaryCache(udocid, sdocid)
-        .then(v => callback(null, v))
-        .catch(err => callback(err));
-    },
-  });
-
-  function getBinaryPath(udocid, sdocid) {
-    return new Promise((resolve, reject) => {
-      _binaryCache.get(`${udocid}:${sdocid}`, (err, value) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(value);
-      });
-    });
-  }
-
-  async function getAndCopyBinary(udocid, sdocid, destPath) {
-    const binPath = await getBinaryPath(udocid, sdocid);
-    await fsp.copy(binPath, destPath);
+  // Each round uses its pinned executable blobs. No shared mutable cache or
+  // unbounded disk growth; its private directory is removed after completion.
+  async function getBinary(sdocid, blob, destPath) {
+    const content = await lzma.decompress(await api.getSubmissionBinary(sdocid, blob), LZMA_DECOMPRESS_OPTIONS);
+    if (content.length > 1048576) throw new Error('Executable exceeds size limit');
+    await fsp.writeFile(destPath, content, { mode: 0o755 });
   }
 
   async function handleJudgeTask(task, affinityCores) {
+    const runToken = uuid.v4();
+    let claimed = false, match;
     const workingDirectory = path.resolve(DI.config.runtimeDirectory, `match/${uuid.v4()}`);
     await fsp.ensureDir(workingDirectory);
 
     try {
       try {
-        await api.roundBegin(task.mdocid, task.rid);
+        match = await api.roundBegin(task.mdocid, task.rid, runToken);
+        claimed = true;
       } catch (err) {
-        if (err instanceof api.APIUserError) {
+        if (utils.isObsoleteTaskError(err)) {
           logger.info('Ignored match %s (round %s): %s', task.mdocid, task.rid, err.message);
           return;
         }
@@ -94,8 +58,8 @@ export default async (mq, logger) => {
         matchConfig[key] = path.resolve(workingDirectory, matchConfig[key]);
       }
 
-      await getAndCopyBinary(task.u1docid, task.s1docid, matchConfig.s1bin);
-      await getAndCopyBinary(task.u2docid, task.s2docid, matchConfig.s2bin);
+      await getBinary(match.u1Submission, match.exe1Blob, matchConfig.s1bin);
+      await getBinary(match.u2Submission, match.exe2Blob, matchConfig.s2bin);
 
       await fsp.writeFile(matchConfig.config, JSON.stringify({
         'sandbox': DI.config.sandbox === null ? null : path.resolve(DI.config.sandbox),
@@ -117,10 +81,13 @@ export default async (mq, logger) => {
 
       let stdout, stderr, code = 0, summary = '';
       try {
-        const execResult = await execFile(matchConfig.command, utils.parseArgs(matchConfig.args), {
+        const execution = execFile(matchConfig.command, utils.parseArgs(matchConfig.args), {
           cwd: workingDirectory,
           maxBuffer: 10 * 1024 * 1024,
+          timeout: 2 * task.rules.roundTimeout + 30000,
+          killSignal: 'SIGTERM',
         });
+        const execResult = await execution;
         stdout = execResult.stdout;
         stderr = execResult.stderr;
       } catch (err) {
@@ -136,10 +103,13 @@ export default async (mq, logger) => {
       summary = (await fsp.readFile(matchConfig.summary)).toString();
 
       logger.info('Match %s (round %s) complete', task.mdocid, task.rid);
-      await api.roundComplete(task.mdocid, task.rid, code, summary, stdout);
+      await api.roundComplete(task.mdocid, task.rid, code, summary, stdout, runToken);
     } catch (err) {
-      await api.roundError(task.mdocid, task.rid, `System internal error occured when judging this round.\n\n${err.stack}`);
-      throw err;
+      if (utils.isObsoleteTaskError(err)) return;
+      if (!claimed || err instanceof api.APIServerError || err instanceof api.APIRequestError ||
+        (err instanceof api.APIUserError && err.statusCode !== 400)) throw err;
+      await api.roundError(task.mdocid, task.rid, `System internal error occured when judging this round.\n\n${err.stack}`, runToken);
+      logger.error(err.stack);
     } finally {
       try {
         await del(workingDirectory, { force: true });
@@ -152,7 +122,8 @@ export default async (mq, logger) => {
   try {
     await mq.assertQueue(JUDGE_QUEUE);
 
-    const prefetch = ~~((os.cpus().length - 1) / 2);
+    const capacity = Math.max(1, Math.floor((os.cpus().length - 1) / 2));
+    const prefetch = Math.min(capacity, Math.max(1, Math.floor(DI.config.match.parallelism || 2)));
     logger.info('Message queue prefetch %d.', prefetch);
     mq.prefetch(prefetch);
 
@@ -166,12 +137,9 @@ export default async (mq, logger) => {
         logger.info('Match %s (round %s): %s', task.mdocid, task.rid, message);
 
         const affinityCores = [utils.captureCore(), utils.captureCore()];
-        handleJudgeTask(task, affinityCores)
-          .catch(e => logger.error(e))
-          .then(() => {
-            affinityCores.forEach(coreIndex => utils.releaseCore(coreIndex));
-            mq.ack(msg);
-          });
+        utils.settleTask(handleJudgeTask(task, affinityCores).finally(() => {
+          affinityCores.forEach(coreIndex => utils.releaseCore(coreIndex));
+        }), mq, msg, logger);
       } catch (e) {
         logger.warn('Failed to parse message content, discarded.');
         logger.warn(e.stack);

@@ -1,6 +1,7 @@
 base:
   api:
     url: http://portal:8888
+    timeout: 15000
     credential:
       username: judge
       password: local-judge-secret
@@ -27,6 +28,7 @@ base:
       env:
         PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   match:
+    parallelism: 2
     s1bin: ./challenger
     s2bin: ./opponent
     config: config.json

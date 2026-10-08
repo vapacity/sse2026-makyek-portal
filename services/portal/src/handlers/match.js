@@ -14,12 +14,14 @@ export default class Handler {
   @web.middleware(utils.sanitizeBody({
     mid: sanitizers.nonEmptyString(),
     rid: sanitizers.nonEmptyString(),
+    runToken: sanitizers.nonEmptyString(),
   }))
   @web.middleware(utils.checkAPI())
   async apiRoundBegin(req, res) {
     const mdoc = await DI.models.Match.judgeStartRoundAsync(
       req.data.mid,
-      req.data.rid
+      req.data.rid,
+      req.data.runToken
     );
     res.json(mdoc);
   }
@@ -28,6 +30,7 @@ export default class Handler {
   @web.middleware(utils.sanitizeBody({
     mid: sanitizers.nonEmptyString(),
     rid: sanitizers.nonEmptyString(),
+    runToken: sanitizers.nonEmptyString(),
     text: sanitizers.nonEmptyString(),
   }))
   @web.middleware(utils.checkAPI())
@@ -38,7 +41,8 @@ export default class Handler {
       DI.models.Match.STATUS_SYSTEM_ERROR,
       {
         text: req.data.text,
-      }
+      },
+      req.data.runToken
     );
     res.json(mdoc);
   }
@@ -47,6 +51,7 @@ export default class Handler {
   @web.middleware(utils.sanitizeBody({
     mid: sanitizers.nonEmptyString(),
     rid: sanitizers.nonEmptyString(),
+    runToken: sanitizers.nonEmptyString(),
     exitCode: sanitizers.int(),
     summary: sanitizers.nonEmptyString(),
     log: sanitizers.string(),
@@ -56,7 +61,9 @@ export default class Handler {
     let usedTime = 1 * 60 * 1000;
     try {
       const sdoc = JSON.parse(req.data.summary);
-      usedTime = sdoc.elapsedRoundTime[0];
+      const elapsed = Number(sdoc.elapsedRoundTime[0]);
+      if (!Number.isFinite(elapsed) || elapsed < 0) throw new Error('Invalid elapsed round time');
+      usedTime = Math.round(elapsed);
     } catch (err) {
       // failed to extract elapsed round time
       DI.logger.error(err.stack);
@@ -70,7 +77,8 @@ export default class Handler {
         usedTime,
         logBlobStream: Readable.from([Buffer.from(req.data.log, 'base64')]),
         text: '',
-      }
+      },
+      req.data.runToken
     );
     res.json(mdoc);
   }

@@ -12,6 +12,13 @@ base:
   cdnPrefix: ''
   scoreboard:
     cacheDuration: 10000
+  tasks:
+    interval: 3000
+    batchSize: 32
+    retryDelay: 30000
+    compileLease: 180000
+    roundLease: 600000
+    matchBatchSize: 8
   web:
     realtimePush: true
   api:
@@ -52,5 +59,13 @@ base:
         publications:
           compile:
             queue: reversi_compile
+            confirm: true
+            options:
+              persistent: true
+              mandatory: true
           judge:
             queue: reversi_judge
+            confirm: true
+            options:
+              persistent: true
+              mandatory: true

@@ -15,7 +15,7 @@ class APIError extends ExtendableError {
         body = null;
       }
     }
-    if (typeof body === 'object' && body.err === true) {
+    if (body && typeof body === 'object' && body.err === true) {
       super(`(${body.name}) ${body.msg}`);
     } else {
       super('Failed to parse API response');
@@ -34,10 +34,11 @@ api.APIUserError = APIUserError;
 async function requestAsync(actionUrl, options = {}) {
   let resp;
   try {
-    resp = await promiseRetry(retry => {
+    resp = await promiseRetry(async retry => {
       return rp({
         simple: false,
         resolveWithFullResponse: true,
+        timeout: DI.config.api.timeout || 15000,
         url: `${DI.config.api.url}${actionUrl}`,
         auth: {
           user: DI.config.api.credential.username,
@@ -47,15 +48,21 @@ async function requestAsync(actionUrl, options = {}) {
           'X-Requested-With': 'XMLHttpRequest',
         },
         ...options,
+      }).then(response => {
+        if (response.statusCode >= 500 || response.statusCode === 429) retry(new APIServerError(response));
+        return response;
       }).catch(retry);
     }, {
-      retries: 5,
+      retries: 2,
+      minTimeout: 1000,
+      maxTimeout: 3000,
     });
   } catch (err) {
+    if (err instanceof APIError) throw err;
     throw new APIRequestError(err.message);
   }
   if (resp.statusCode !== 200) {
-    if (resp.statusCode === 500) {
+    if (resp.statusCode >= 500 || resp.statusCode === 429) {
       throw new APIServerError(resp);
     } else {
       throw new APIUserError(resp);
@@ -81,17 +88,18 @@ async function requestBinaryAsync(actionUrl, options = {}) {
   return resp.body;
 }
 
-api.compileBegin = (id, token) => {
+api.compileBegin = (id, token, runToken) => {
   return requestJsonAsync('/submission/api/compileBegin', {
     method: 'POST',
-    body: { id, token },
+    body: { id, token, runToken },
   });
 };
 
-api.compileEnd = (id, token, text, success, lzmaBuffer) => {
+api.compileEnd = (id, token, text, success, lzmaBuffer, runToken) => {
   const body = {
     id,
     token,
+    runToken,
     text,
     success,
   };
@@ -104,38 +112,39 @@ api.compileEnd = (id, token, text, success, lzmaBuffer) => {
   });
 };
 
-api.compileError = (id, token, text) => {
+api.compileError = (id, token, text, runToken) => {
   return requestJsonAsync('/submission/api/compileError', {
     method: 'POST',
-    body: { id, token, text },
+    body: { id, token, text, runToken },
   });
 };
 
-api.getSubmissionBinary = (id) => {
+api.getSubmissionBinary = (id, blob) => {
   return requestBinaryAsync('/submission/api/binary', {
-    qs: { id },
+    qs: { id, blob },
     method: 'GET',
   });
 };
 
-api.roundBegin = (mid, rid) => {
+api.roundBegin = (mid, rid, runToken) => {
   return requestJsonAsync('/match/api/roundBegin', {
     method: 'POST',
-    body: { mid, rid },
+    body: { mid, rid, runToken },
   });
 };
 
-api.roundError = (mid, rid, text) => {
+api.roundError = (mid, rid, text, runToken) => {
   return requestJsonAsync('/match/api/roundError', {
     method: 'POST',
-    body: { mid, rid, text },
+    body: { mid, rid, text, runToken },
   });
 };
 
-api.roundComplete = (mid, rid, exitCode, summary, logBuffer) => {
+api.roundComplete = (mid, rid, exitCode, summary, logBuffer, runToken) => {
   const body = {
     mid,
     rid,
+    runToken,
     exitCode,
     summary,
     log: Buffer.from(logBuffer || '').toString('base64'),

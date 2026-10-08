@@ -7,6 +7,18 @@ import jschardet from 'jschardet';
 
 const utils = {};
 
+utils.settleTask = (promise, mq, msg, logger) => promise.then(
+  () => { try { mq.ack(msg); } catch (err) { logger.error(err); } },
+  err => {
+    logger.error(err.stack || err);
+    // Keep the delivery unacknowledged while backing off; channel closure also
+    // requeues it. Never acknowledge a failed result/error callback.
+    setTimeout(() => { try { mq.nack(msg, false, true); } catch (e) { logger.error(e); } }, 2000);
+  }
+);
+
+utils.isObsoleteTaskError = err => err && err.statusCode === 409;
+
 utils.iconv = (buffer) => {
   const encoding = jschardet.detect(buffer).encoding;
   if (!encoding) {

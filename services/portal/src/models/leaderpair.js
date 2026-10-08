@@ -83,8 +83,31 @@ export default () => {
     }
     return true;
   };
-  LeaderPairSchema.statics.updatePairByMatchAsync = function (mdoc, verify = false) {
+  LeaderPairSchema.statics.updatePairByMatchAsync = async function (mdoc, verify = false) {
+    if (!await DI.models.Match.isCurrentAsync(mdoc)) return false;
     return LeaderPair.updatePairAsync(mdoc.u1, mdoc.u2, mdoc.u1Submission, mdoc.status, verify);
+  };
+
+  // Aggregate in MongoDB: return O(users) totals, not O(users^2) pair records.
+  LeaderPairSchema.statics.getStatsAsync = async function () {
+    return LeaderPair.aggregate([
+      { $sort: { u1Submission: -1 } },
+      { $group: { _id: {
+        a: { $cond: [{ $lt: ['$u1', '$u2'] }, '$u1', '$u2'] },
+        b: { $cond: [{ $lt: ['$u1', '$u2'] }, '$u2', '$u1'] },
+      }, u1: { $first: '$u1' }, u2: { $first: '$u2' }, status: { $first: '$status' } } },
+      { $project: { rows: [
+        { user: '$u1', win: { $cond: [{ $eq: ['$status', 'u1win'] }, 1, 0] },
+          lose: { $cond: [{ $eq: ['$status', 'u2win'] }, 1, 0] },
+          draw: { $cond: [{ $eq: ['$status', 'draw'] }, 1, 0] } },
+        { user: '$u2', win: { $cond: [{ $eq: ['$status', 'u2win'] }, 1, 0] },
+          lose: { $cond: [{ $eq: ['$status', 'u1win'] }, 1, 0] },
+          draw: { $cond: [{ $eq: ['$status', 'draw'] }, 1, 0] } },
+      ] } },
+      { $unwind: '$rows' },
+      { $group: { _id: '$rows.user', win: { $sum: '$rows.win' },
+        lose: { $sum: '$rows.lose' }, draw: { $sum: '$rows.draw' } } },
+    ]).allowDiskUse(true);
   };
 
   /**

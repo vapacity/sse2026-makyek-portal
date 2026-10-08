@@ -7,10 +7,11 @@ import lzma from 'lzma-native';
 
 import api from 'libs/api';
 import compile from 'libs/compile';
+import utils from 'libs/utils';
 
 const LZMA_COMPRESS_OPTIONS = {
   preset: 4,
-  threads: 0,
+  threads: 1,
 };
 
 const COMPILE_QUEUE = 'reversi_compile';
@@ -24,15 +25,18 @@ export default async (mq, logger) => {
   logger.debug('Compiler settings: %s', JSON.stringify(compile.settings, null, 2));
 
   async function handleCompileTask(task) {
+    const runToken = uuid.v4();
+    let claimed = false;
     const workingDirectory = path.resolve(DI.config.runtimeDirectory, `compile/${uuid.v4()}`);
     await fsp.ensureDir(workingDirectory);
 
     try {
       let submission;
       try {
-        submission = await api.compileBegin(task.sdocid, task.token);
+        submission = await api.compileBegin(task.sdocid, task.token, runToken);
+        claimed = true;
       } catch (err) {
-        if (err instanceof api.APIUserError) {
+        if (utils.isObsoleteTaskError(err)) {
           logger.info('Ignored task %s: %s', task.sdocid, err.message);
           return;
         }
@@ -53,10 +57,13 @@ export default async (mq, logger) => {
         lzmaBuffer = await lzma.compress(binaryBuffer, LZMA_COMPRESS_OPTIONS);
       }
 
-      await api.compileEnd(task.sdocid, task.token, text, success, lzmaBuffer);
+      await api.compileEnd(task.sdocid, task.token, text, success, lzmaBuffer, runToken);
     } catch (err) {
-      await api.compileError(task.sdocid, task.token, `System internal error occured when compiling this submission.\n\n${err.stack}`);
-      throw err;
+      if (utils.isObsoleteTaskError(err)) return;
+      if (!claimed || err instanceof api.APIServerError || err instanceof api.APIRequestError ||
+        (err instanceof api.APIUserError && err.statusCode !== 400)) throw err;
+      await api.compileError(task.sdocid, task.token, `System internal error occured when compiling this submission.\n\n${err.stack}`, runToken);
+      logger.error(err.stack);
     } finally {
       try {
         await del(workingDirectory, { force: true });
@@ -78,9 +85,7 @@ export default async (mq, logger) => {
         const message = msg.content.toString();
         const task = JSON.parse(message);
         logger.info('Compile: %s: %s', task.sdocid, message);
-        handleCompileTask(task)
-          .catch(e => logger.error(e))
-          .then(() => mq.ack(msg));
+        utils.settleTask(handleCompileTask(task), mq, msg, logger);
       } catch (e) {
         logger.warn('Failed to parse message content, discarded.');
         logger.warn(e.stack);

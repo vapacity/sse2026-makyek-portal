@@ -51,25 +51,45 @@ compile.doCompile = async ({ workingDirectory, code, compiler, limits }) => {
   } else {
     execOptFile = compileConfig.command;
     execOptArgs = utils.parseArgs(compileConfig.args);
+    if (process.platform === 'linux') {
+      execOptFile = '/usr/bin/prlimit';
+      execOptArgs = ['--as=805306368', `--cpu=${Math.ceil(compileConfig.timeout / 1000)}`,
+        '--', compileConfig.command, ...execOptArgs];
+    }
   }
 
   let success, stdout, stderr;
+  let execution, killTimer;
 
   try {
-    const execResult = await execFile(execOptFile, execOptArgs, {
+    execution = execFile(execOptFile, execOptArgs, {
       cwd: workingDirectory,
       env: compileConfig.env || {},
       timeout: compileConfig.timeout,
       maxBuffer: 1 * 1024 * 1024,
       encoding: 'buffer',
+      detached: process.platform !== 'win32',
     });
+    if (process.platform !== 'win32') {
+      // execFile's timeout only kills GCC's parent process. Its cc1/assembler
+      // children can keep pipes open, so enforce the deadline on the group too.
+      killTimer = setTimeout(() => {
+        try { process.kill(-execution.childProcess.pid, 'SIGKILL'); } catch (ignore) { /* already exited */ }
+      }, compileConfig.timeout + 1000);
+    }
+    const execResult = await execution;
     stdout = utils.iconv(execResult.stdout);
     stderr = utils.iconv(execResult.stderr);
     success = true;
   } catch (err) {
-    stdout = utils.iconv(err.stdout);
+    stdout = utils.iconv(err.stdout || Buffer.alloc(0));
     stderr = err.message;
     success = false;
+  } finally {
+    clearTimeout(killTimer);
+    if (execution && process.platform !== 'win32') {
+      try { process.kill(-execution.childProcess.pid, 'SIGKILL'); } catch (ignore) { /* already exited */ }
+    }
   }
   let text = (stdout + '\n' + stderr).trim();
   if (text.length > limits.sizeOfText) {

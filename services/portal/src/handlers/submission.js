@@ -23,12 +23,14 @@ export default class Handler {
   @web.middleware(utils.sanitizeBody({
     id: sanitizers.nonEmptyString(),
     token: sanitizers.nonEmptyString(),
+    runToken: sanitizers.nonEmptyString(),
   }))
   @web.middleware(utils.checkAPI())
   async apiCompileBegin(req, res) {
     const sdoc = await DI.models.Submission.judgeStartCompileAsync(
       req.data.id,
-      req.data.token
+      req.data.token,
+      req.data.runToken
     );
     await sdoc.populate('user').execPopulate();
     res.json(sdoc);
@@ -38,6 +40,7 @@ export default class Handler {
   @web.middleware(utils.sanitizeBody({
     id: sanitizers.nonEmptyString(),
     token: sanitizers.nonEmptyString(),
+    runToken: sanitizers.nonEmptyString(),
     text: sanitizers.string(),
   }))
   @web.middleware(utils.checkAPI())
@@ -45,7 +48,8 @@ export default class Handler {
     const sdoc = await DI.models.Submission.judgeSetSystemErrorAsync(
       req.data.id,
       req.data.token,
-      req.data.text
+      req.data.text,
+      req.data.runToken
     );
     res.json(sdoc);
   }
@@ -54,12 +58,15 @@ export default class Handler {
   @web.middleware(utils.sanitizeBody({
     id: sanitizers.nonEmptyString(),
     token: sanitizers.nonEmptyString(),
+    runToken: sanitizers.nonEmptyString(),
     text: sanitizers.string(),
     success: sanitizers.bool(),
     binary: sanitizers.string().optional(null),
   }))
   @web.middleware(utils.checkAPI())
   async apiCompileEnd(req, res) {
+    const owner = await DI.models.Submission.checkCompileOwnerAsync(req.data.id, req.data.token, req.data.runToken);
+    if (owner.completedCompileRunToken === req.data.runToken) { res.json(owner); return; }
     let file = null;
     if (req.data.success && req.data.binary) {
       const binary = Buffer.from(req.data.binary, 'base64');
@@ -74,32 +81,41 @@ export default class Handler {
         },
       });
     }
-    const sdoc = await DI.models.Submission.judgeCompleteCompileAsync(
+    let sdoc;
+    try { sdoc = await DI.models.Submission.judgeCompleteCompileAsync(
       req.data.id,
       req.data.token,
       req.data.success,
       req.data.text,
-      file === null ? null : file._id
-    );
+      file === null ? null : file._id,
+      req.data.runToken
+    ); } catch (err) {
+      // Only a definite ownership rejection is safe to clean up. A network
+      // error may occur after Mongo committed the reference.
+      if (file && err instanceof errors.TaskConflictError) await DI.gridfs.removeAsync({ _id: file._id });
+      throw err;
+    }
     res.json(sdoc);
   }
 
   @web.get('/api/binary')
   @web.middleware(utils.sanitizeQuery({
     id: sanitizers.nonEmptyString(),
+    blob: sanitizers.objectId().optional(null),
   }))
   @web.middleware(utils.checkAPI())
   async apiGetBinary(req, res) {
     const sdoc = await DI.models.Submission.getSubmissionObjectByIdAsync(req.data.id);
-    if (!sdoc.exeBlob) {
+    const blob = req.data.blob || sdoc.exeBlob;
+    if (!blob) {
       throw new errors.UserError('Executable file not found for the submission');
     }
-    const exists = await DI.gridfs.existsAsync(sdoc.exeBlob);
+    const exists = await DI.gridfs.existsAsync(blob, { 'metadata.submission': String(sdoc._id) });
     if (!exists) {
       throw new errors.UserError('Executable blob does not exist in the database for the submission');
     }
     res.setHeader('Content-disposition', `attachment; filename=${req.data.id}.7z`);
-    await DI.gridfs.getBlobAsync(sdoc.exeBlob, res);
+    await DI.gridfs.getBlobAsync(blob, res);
   }
 
   @web.get('/')

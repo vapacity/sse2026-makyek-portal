@@ -26,9 +26,9 @@ export default async (dbConnection) => {
         rstream.pipe(wstream);
       });
     },
-    existsAsync(id) {
+    existsAsync(id, query = {}) {
       return new Promise((resolve, reject) => {
-        bucket.find({ _id: id }).limit(1).toArray((err, files) => {
+        bucket.find({ _id: id, ...query }).limit(1).toArray((err, files) => {
           if (err) {
             return reject(err);
           }

@@ -22,9 +22,16 @@ utils.spawnSandbox = (command, args, sandboxBin, sandboxOptions) => {
   } else {
     spawnCommand = command;
     spawnArgs = args;
+    if (process.platform === 'linux') {
+      spawnCommand = '/usr/bin/prlimit';
+      spawnArgs = [`--as=${sandboxOptions.maxMemory}`, '--nproc=0',
+        `--cpu=${Math.ceil((sandboxOptions.maxTime || 90000) / 1000) + 10}`,
+        '--', command, ...args];
+    }
   }
   return child_process.spawn(spawnCommand, spawnArgs, {
     stdio: 'pipe',
+    detached: process.platform !== 'win32',
   });
 };
 
@@ -40,7 +47,7 @@ utils.terminateProcess = (child) => {
       // kill process tree
       child_process.execSync(`taskkill /pid ${child.pid} /T /F`);
     } else {
-      child.kill('SIGKILL');
+      process.kill(-child.pid, 'SIGKILL');
     }
   } catch (ignore) {
     // ignore

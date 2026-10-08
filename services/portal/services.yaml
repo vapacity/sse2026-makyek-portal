@@ -76,6 +76,12 @@ webSecurity:
 models:
   path: models
 
+taskDispatcher:
+  path: task.dispatcher
+  inject:
+    - models
+    - logger
+
 # ========================
 # Presentation Layer
 

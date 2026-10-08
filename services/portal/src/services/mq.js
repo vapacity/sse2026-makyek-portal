@@ -13,6 +13,12 @@ export default async (logger) => {
     async publish(publishId, data) {
       const publication = await broker.publishAsync(publishId, data);
       publication.on('error', e => logger.error(e));
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('MQ publish confirmation timed out')), 10000);
+        publication.once('success', () => { clearTimeout(timer); resolve(); });
+        publication.once('error', err => { clearTimeout(timer); reject(err); });
+        publication.once('return', () => { clearTimeout(timer); reject(new Error('MQ message was returned')); });
+      });
       return publication;
     },
     shutdown(...args) {
