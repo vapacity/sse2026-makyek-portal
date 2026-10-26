@@ -5,3 +5,7 @@
 **/.gulp-cache/
 **/logs/*.log
 .runtime/
+.loadtest/
+.env
+.env.*
+!.env.example

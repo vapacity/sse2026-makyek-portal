@@ -10,6 +10,12 @@
     "logs": "docker compose logs -f portal compiler judge",
     "smoke:judge": "node scripts/smoke-judge.js",
     "test:concurrency": "docker compose build portal compiler && docker compose --profile test build tests && docker compose run --rm --no-deps tests",
-    "test:resources": "docker compose build portal compiler && docker compose --profile test build tests && docker compose run --rm --no-deps tests node /workspace/scripts/test-resources.js"
+    "test:resources": "docker compose build portal compiler && docker compose --profile test build tests && docker compose run --rm --no-deps tests node /workspace/scripts/test-resources.js",
+    "test:load-tools": "node scripts/test-load-tools.js",
+    "preflight:production": "node scripts/deployment-preflight.js --mode production",
+    "preflight:staging": "node scripts/deployment-preflight.js --mode staging --compose deploy/compose.staging.yaml",
+    "capacity:500": "node scripts/capacity-plan.js --students 500",
+    "load:read": "node scripts/load-test.js --target http://127.0.0.1:18888/",
+    "load:submit": "node scripts/load-test.js --target http://127.0.0.1:18888/ --scenario submit"
   }
 }

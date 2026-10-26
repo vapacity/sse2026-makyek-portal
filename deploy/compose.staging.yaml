@@ -1,0 +1,173 @@
+# Standalone STAGING stack. Do not merge with compose.yaml.
+# Default credentials remain for isolated trusted-code testing only.
+# Mount a verified data-disk directory first; pre-create all four subdirectories.
+name: makyek-staging
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  mongo:
+    logging: *bounded-logging
+    cpus: 8
+    mem_limit: 32g
+    image: mongo:4.4
+    platform: linux/amd64
+    command: ["--auth", "--wiredTigerCacheSizeGB", "16"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: local-mongo-root
+      MONGO_INITDB_DATABASE: db
+      MONGO_USERNAME: makyek
+      MONGO_PASSWORD: makyek
+    volumes:
+      - mongo-data:/data/db
+      - ../services/portal/mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
+    healthcheck:
+      test: ["CMD", "mongo", "--quiet", "--username", "root", "--password", "local-mongo-root", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    logging: *bounded-logging
+    cpus: 2
+    mem_limit: 4g
+    image: redis:6-alpine
+    command: ["redis-server", "--requirepass", "local-redis", "--maxmemory", "3gb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "local-redis", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  rabbit:
+    logging: *bounded-logging
+    cpus: 2
+    mem_limit: 4g
+    image: rabbitmq:3.12-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: root
+      RABBITMQ_DEFAULT_PASS: local-rabbit
+    ports:
+      - "127.0.0.1:15673:15672"
+    volumes:
+      - rabbit-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  portal:
+    logging: *bounded-logging
+    image: makyek-mac-portal
+    build:
+      context: ..
+      dockerfile: services/portal/Dockerfile
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbit:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18888:8888"
+    restart: unless-stopped
+    cpus: 4
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8888/login', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  compiler:
+    logging: *bounded-logging
+    image: makyek-mac-compiler
+    build:
+      context: ..
+      dockerfile: services/jd/Dockerfile
+    command: ["node", ".dist/jd.js", "--role", "compile"]
+    depends_on:
+      portal:
+        condition: service_healthy
+      rabbit:
+        condition: service_healthy
+    volumes:
+      - runtime-data:/workspace/runtime
+    restart: unless-stopped
+    init: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    cpus: 2
+    mem_limit: 2g
+
+  judge:
+    logging: *bounded-logging
+    image: makyek-mac-judge
+    build:
+      context: ..
+      dockerfile: services/jd/Dockerfile
+    command: ["node", ".dist/jd.js", "--role", "match"]
+    depends_on:
+      portal:
+        condition: service_healthy
+      rabbit:
+        condition: service_healthy
+    volumes:
+      - runtime-data:/workspace/runtime
+    restart: unless-stopped
+    init: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    cpus: 4
+    mem_limit: 4g
+
+  tests:
+    profiles: ["test"]
+    build:
+      context: ..
+      dockerfile: services/tests/Dockerfile
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbit:
+        condition: service_healthy
+    init: true
+
+volumes:
+  mongo-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MAKYEK_STAGING_ROOT:?Set MAKYEK_STAGING_ROOT to a prepared data-disk directory}/mongo
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MAKYEK_STAGING_ROOT:?Set MAKYEK_STAGING_ROOT to a prepared data-disk directory}/redis
+  rabbit-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MAKYEK_STAGING_ROOT:?Set MAKYEK_STAGING_ROOT to a prepared data-disk directory}/rabbit
+  runtime-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MAKYEK_STAGING_ROOT:?Set MAKYEK_STAGING_ROOT to a prepared data-disk directory}/runtime

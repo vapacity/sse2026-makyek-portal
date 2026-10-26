@@ -1,4 +1,7 @@
 .git
+.loadtest
+.env
+.env.*
 **/.git
 **/node_modules
 **/.dist

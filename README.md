@@ -41,6 +41,8 @@
 
 ## 环境要求
 
+计划面向 500 人以上部署时，先阅读 [生产就绪评估](docs/production-readiness.md) 和 [服务器压测手册](docs/load-testing.md)。仓库已准备独立 staging 配置、静态预检、容量估算和压测工具；这些准备不代表已经完成服务器实测或生产安全加固。
+
 - 能运行本项目 Linux 镜像的 Docker 环境。
 - Docker Compose V2，使用 `docker compose` 命令。
 - 首次构建能访问 Docker 镜像源、npm 及依赖下载地址。
